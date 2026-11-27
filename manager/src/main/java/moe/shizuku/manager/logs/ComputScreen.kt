@@ -487,7 +487,7 @@ fun ComputScreen(
 
             if (hasFailed && !cancelled && ModuleSettings.isComputAiExplainEnabled()) {
                 val apiKey = ModuleSettings.getComputApiKey()
-                if (apiKey.isNotBlank()) {
+                if (moe.shizuku.manager.commandium.AiProviderRepository.isActiveReady() || apiKey.isNotBlank()) {
                     scope.launch {
                         isExplaining = true
                         showGeminiSection = true
@@ -527,7 +527,7 @@ fun ComputScreen(
 
                 if (hasFailed && ModuleSettings.isComputAiExplainEnabled()) {
                     val apiKey = ModuleSettings.getComputApiKey()
-                    if (apiKey.isNotBlank()) {
+                    if (moe.shizuku.manager.commandium.AiProviderRepository.isActiveReady() || apiKey.isNotBlank()) {
                         scope.launch {
                             isExplaining = true
                             showGeminiSection = true
@@ -942,8 +942,7 @@ fun ComputScreen(
                     showGeminiSection = showGeminiSection,
                     isExplaining = isExplaining,
                     onToggleGemini = {
-                        val activeKey = moe.shizuku.manager.commandium.AiProviderRepository.getActiveKey()
-                        if (activeKey.isBlank()) {
+                        if (!moe.shizuku.manager.commandium.AiProviderRepository.isActiveReady()) {
                             scope.launch {
                                 val action = snackbarHostState.showSnackbar(
                                     message = context.getString(R.string.comput_ai_no_active_toast),

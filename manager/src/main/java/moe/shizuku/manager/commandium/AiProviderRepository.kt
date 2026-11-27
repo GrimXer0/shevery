@@ -69,7 +69,7 @@ object AiProviderRepository {
             // endpoint; on any other host (OpenRouter/Groq/...) it 404s as
             // "model not found". Guard on the provider's own base URL so a real
             // Google Gemini provider keeps its picked model.
-            val onGoogle = p.baseUrl.contains("generativelanguage.googleapis.com")
+            val onGoogle = p.baseUrl.contains("generativelanguage.googleapis.com") || isGeminiNano(p.baseUrl)
             if (!onGoogle && p.model.startsWith("gemini") && !p.model.contains("/")) {
                 changed = true
                 p.copy(model = "")
@@ -248,6 +248,16 @@ object AiProviderRepository {
         val active = getActive() ?: return
         setKey(active.id, value)
     }
+
+    /** True when [provider] can serve requests (local Gemini Nano needs no API key). */
+    fun isProviderReady(provider: AiProvider?): Boolean {
+        if (provider == null) return false
+        if (isGeminiNano(provider.baseUrl)) return true
+        return getKey(provider.id).isNotBlank()
+    }
+
+    /** True when an active provider exists and has credentials (or is local). */
+    fun isActiveReady(): Boolean = isProviderReady(getActive())
 
     // -- legacy migration --------------------------------------------------
 

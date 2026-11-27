@@ -163,6 +163,12 @@ fun AiModelSwitcherSheet(
         if (selectedId.isEmpty()) return@LaunchedEffect
         val provider = providers.firstOrNull { it.id == selectedId } ?: return@LaunchedEffect
         query = ""
+        if (isGeminiNano(provider.baseUrl)) {
+            loading = false
+            failed = false
+            models = listOf(GEMINI_NANO_DEFAULT_MODEL)
+            return@LaunchedEffect
+        }
         val cached = repo.getCachedModels(provider.id, provider.baseUrl)
         if (cached.isNotEmpty()) {
             models = cached

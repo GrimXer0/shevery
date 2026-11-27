@@ -459,7 +459,7 @@ fun ModulesScreen(
             aiLoading = aiLoading,
             onAskAi = {
                 val apiKey = ModuleSettings.getComputApiKey()
-                if (apiKey.isBlank()) {
+                if (!moe.shizuku.manager.commandium.AiProviderRepository.isActiveReady() && apiKey.isBlank()) {
                     Toast.makeText(context, context.getString(R.string.comput_ai_no_active_toast), Toast.LENGTH_SHORT).show()
                 } else {
                     aiLoading = true

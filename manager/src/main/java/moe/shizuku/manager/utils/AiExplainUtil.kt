@@ -3,6 +3,8 @@ package moe.shizuku.manager.utils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import moe.shizuku.manager.commandium.AiProviderRepository
+import moe.shizuku.manager.commandium.GEMINI_NANO_DEFAULT_MODEL
+import moe.shizuku.manager.commandium.isGeminiNano
 import moe.shizuku.manager.module.ModuleSettings
 
 object AiExplainUtil {
@@ -21,8 +23,11 @@ object AiExplainUtil {
      * upgrade (OpenRouter: "Model not found: gemini-3.6-flash"), so it is no
      * longer consulted — a blank model yields a clear message instead.
      */
-    internal fun resolveModel(baseUrl: String): String =
-        if (isGoogleBase(baseUrl)) CURRENT_GOOGLE_MODEL else ""
+    internal fun resolveModel(baseUrl: String): String = when {
+        isGeminiNano(baseUrl) -> GEMINI_NANO_DEFAULT_MODEL
+        isGoogleBase(baseUrl) -> CURRENT_GOOGLE_MODEL
+        else -> ""
+    }
 
     /** gemini-1.x/2.x flat slugs are inside or past their shutdown window on
      * Google endpoints (gemini-2.5-flash cut over 2026-10-16 and has been
@@ -44,13 +49,14 @@ object AiExplainUtil {
         val active = AiProviderRepository.getActive()
         val baseUrl = active?.baseUrl?.takeIf { it.isNotBlank() }
             ?: ModuleSettings.getComputAiBaseUrl()
+        val isLocal = isGeminiNano(baseUrl)
         val model = active?.model?.takeIf { it.isNotBlank() }?.let { currentGoogleModel(baseUrl, it) } ?: resolveModel(baseUrl)
         if (model.isBlank()) {
             return@withContext "No AI model is selected. Open the AI switcher (console → Ask AI) and pick a model."
         }
         val resolvedKey = active?.let { p -> AiProviderRepository.getKey(p.id).takeIf { it.isNotBlank() } }
             ?: apiKey
-        if (resolvedKey.isBlank()) {
+        if (!isLocal && resolvedKey.isBlank()) {
             return@withContext "API key is empty! Please configure it in Shevery Settings."
         }
 
@@ -80,13 +86,14 @@ object AiExplainUtil {
         val active = AiProviderRepository.getActive()
         val baseUrl = active?.baseUrl?.takeIf { it.isNotBlank() }
             ?: ModuleSettings.getComputAiBaseUrl()
+        val isLocal = isGeminiNano(baseUrl)
         val model = active?.model?.takeIf { it.isNotBlank() }?.let { currentGoogleModel(baseUrl, it) } ?: resolveModel(baseUrl)
         if (model.isBlank()) {
             return@withContext Result.failure(IllegalStateException("No AI model is selected. Open the AI switcher (console → Ask AI) and pick a model."))
         }
         val resolvedKey = active?.let { p -> AiProviderRepository.getKey(p.id).takeIf { it.isNotBlank() } }
             ?: apiKey
-        if (resolvedKey.isBlank()) {
+        if (!isLocal && resolvedKey.isBlank()) {
             return@withContext Result.failure(IllegalStateException("API key is empty! Please configure it in Shevery Settings."))
         }
 

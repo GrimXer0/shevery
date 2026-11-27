@@ -32,12 +32,15 @@ import moe.shizuku.manager.guide.GuideTopic
 import moe.shizuku.manager.guide.ShakeGuideHost
 import moe.shizuku.manager.commandium.AiProvider
 import moe.shizuku.manager.commandium.AiProviderRepository
+import moe.shizuku.manager.commandium.GEMINI_NANO_DEFAULT_MODEL
+import moe.shizuku.manager.commandium.isGeminiNano
 import moe.shizuku.manager.ui.compose.GroupDivider
 import moe.shizuku.manager.ui.compose.SettingsGroup
 import moe.shizuku.manager.ui.compose.SettingsRow
 import moe.shizuku.manager.ui.compose.ShizukuExpressiveTheme
 import moe.shizuku.manager.ui.compose.ShizukuLazyScaffold
 import moe.shizuku.manager.utils.AiClient
+import moe.shizuku.manager.utils.GeminiNanoClient
 
 /**
  * Full-screen AI provider manager. Lists every configured provider, marks the
@@ -72,13 +75,28 @@ fun AiManagerScreen(
         scope.launch {
             testingId = provider.id
             testStatus = testStatus - provider.id
-            val key = AiProviderRepository.getKey(provider.id)
-            if (key.isBlank()) {
-                testStatus = testStatus + (provider.id to "nokey")
+            if (isGeminiNano(provider.baseUrl)) {
+                val availability = GeminiNanoClient.checkAvailability()
+                val statusValue = when (availability.status) {
+                    GeminiNanoClient.AvailabilityStatus.AVAILABLE ->
+                        "nano_ok:" + (availability.baseModelName ?: GEMINI_NANO_DEFAULT_MODEL)
+                    GeminiNanoClient.AvailabilityStatus.DOWNLOADABLE -> "nano_downloadable"
+                    GeminiNanoClient.AvailabilityStatus.DOWNLOADING -> "nano_downloading"
+                    GeminiNanoClient.AvailabilityStatus.UNSUPPORTED_ANDROID ->
+                        "fail:Requires Android 8.0 (API 26) or higher"
+                    GeminiNanoClient.AvailabilityStatus.UNAVAILABLE ->
+                        "fail:" + (availability.errorMessage ?: "Unavailable on this device (requires Pixel 9+ with AICore)")
+                }
+                testStatus = testStatus + (provider.id to statusValue)
             } else {
-                AiClient.listModels(provider.baseUrl, key)
-                    .onSuccess { list -> testStatus = testStatus + (provider.id to "ok:" + list.size) }
-                    .onFailure { e -> testStatus = testStatus + (provider.id to "fail:" + (e.message ?: "")) }
+                val key = AiProviderRepository.getKey(provider.id)
+                if (key.isBlank()) {
+                    testStatus = testStatus + (provider.id to "nokey")
+                } else {
+                    AiClient.listModels(provider.baseUrl, key)
+                        .onSuccess { list -> testStatus = testStatus + (provider.id to "ok:" + list.size) }
+                        .onFailure { e -> testStatus = testStatus + (provider.id to "fail:" + (e.message ?: "")) }
+                }
             }
             testingId = null
         }
@@ -129,12 +147,20 @@ fun AiManagerScreen(
                         providers.forEachIndexed { index, provider ->
                         if (index > 0) GroupDivider()
                         val isActive = provider.id == activeId
+                        val isLocal = isGeminiNano(provider.baseUrl)
                         val hasKey = AiProviderRepository.getKey(provider.id).isNotBlank()
                         val summary = buildString {
-                                                    if (provider.model.isNotBlank()) append(provider.model)
-                                                    if (provider.model.isNotBlank()) append(" - ")
+                                                    val displayModel = provider.model.ifBlank {
+                                                        if (isLocal) GEMINI_NANO_DEFAULT_MODEL else ""
+                                                    }
+                                                    if (displayModel.isNotBlank()) append(displayModel)
+                                                    if (displayModel.isNotBlank()) append(" - ")
                                                     append(
-                                                        if (hasKey) stringResource(R.string.comput_ai_key_saved) else stringResource(R.string.comput_ai_key_missing)
+                                                        when {
+                                                            isLocal -> stringResource(R.string.comput_ai_local_summary)
+                                                            hasKey -> stringResource(R.string.comput_ai_key_saved)
+                                                            else -> stringResource(R.string.comput_ai_key_missing)
+                                                        }
                                                     )
                                                 }
                         SettingsRow(
@@ -179,6 +205,13 @@ fun AiManagerScreen(
                                 text = when {
                                     testing -> stringResource(R.string.comput_ai_test_testing)
                                     status == "nokey" -> stringResource(R.string.comput_ai_test_no_key)
+                                    status == "nano_downloadable" -> stringResource(R.string.comput_ai_nano_test_downloadable)
+                                    status == "nano_downloading" -> stringResource(R.string.comput_ai_nano_test_downloading)
+                                    status != null && status.startsWith("nano_ok:") ->
+                                        stringResource(
+                                            R.string.comput_ai_nano_test_available,
+                                            status.removePrefix("nano_ok:")
+                                        )
                                     status != null && status.startsWith("ok:") ->
                                         stringResource(
                                             R.string.comput_ai_test_ok,
