@@ -143,8 +143,7 @@ fun ComputAgentSheet(
     var pendingReply by remember { mutableStateOf<String?>(null) }
 
     val safetyMode = ModuleSettings.getAgentSafetyMode()
-    val hasProvider = AiProviderRepository.getActive() != null &&
-        AiProviderRepository.getActiveKey().isNotBlank()
+    val hasProvider = AiProviderRepository.isActiveReady()
 
     // Read outside the AI callbacks: stringResource() only works in composition.
     val planEmptyText = stringResource(R.string.comput_agent_plan_empty)

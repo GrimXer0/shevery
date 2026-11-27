@@ -143,9 +143,9 @@ fun CommandiumSheet(
             )
 
             val activeProvider = moe.shizuku.manager.commandium.AiProviderRepository.getActive()
-            val activeKey = moe.shizuku.manager.commandium.AiProviderRepository.getActiveKey()
+            val isProviderReady = moe.shizuku.manager.commandium.AiProviderRepository.isProviderReady(activeProvider)
             val activeLabel = when {
-                activeProvider == null || activeKey.isBlank() ->
+                activeProvider == null || !isProviderReady ->
                     stringResource(R.string.comput_ai_chip_active, stringResource(R.string.comput_ai_key_missing))
                 activeProvider.model.isNullOrBlank() -> {
                     val defaultModel = AiExplainUtil.resolveModel(activeProvider.baseUrl)
@@ -168,7 +168,7 @@ fun CommandiumSheet(
                     label = { Text(activeLabel, maxLines =1) },
                 )
             }
-            if (activeProvider == null || activeKey.isBlank()) {
+            if (activeProvider == null || !isProviderReady) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -208,7 +208,7 @@ fun CommandiumSheet(
                 }
             }
 
-            if (activeProvider != null && activeKey.isNotBlank()) {
+            if (activeProvider != null && isProviderReady) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)

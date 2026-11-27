@@ -2,6 +2,8 @@ package moe.shizuku.manager.utils
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import moe.shizuku.manager.commandium.GEMINI_NANO_DEFAULT_MODEL
+import moe.shizuku.manager.commandium.isGeminiNano
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -35,6 +37,9 @@ object AiClient {
         systemPrompt: String?,
         userPrompt: String,
     ): Result<String> = withContext(Dispatchers.IO) {
+        if (isGeminiNano(baseUrl)) {
+            return@withContext GeminiNanoClient.chatCompletion(systemPrompt, userPrompt)
+        }
         if (apiKey.isBlank()) return@withContext Result.failure(IllegalStateException("empty_key"))
         if (model.isBlank()) return@withContext Result.failure(IllegalStateException("empty_model"))
         try {
@@ -77,6 +82,19 @@ object AiClient {
 
     suspend fun listModels(baseUrl: String, apiKey: String): Result<List<String>> =
         withContext(Dispatchers.IO) {
+            if (isGeminiNano(baseUrl)) {
+                val availability = GeminiNanoClient.checkAvailability()
+                return@withContext when (availability.status) {
+                    GeminiNanoClient.AvailabilityStatus.AVAILABLE,
+                    GeminiNanoClient.AvailabilityStatus.DOWNLOADABLE,
+                    GeminiNanoClient.AvailabilityStatus.DOWNLOADING ->
+                        Result.success(listOf(availability.baseModelName ?: GEMINI_NANO_DEFAULT_MODEL))
+                    GeminiNanoClient.AvailabilityStatus.UNSUPPORTED_ANDROID ->
+                        Result.failure(IllegalStateException("Gemini Nano requires Android 8.0 (API 26) or higher."))
+                    GeminiNanoClient.AvailabilityStatus.UNAVAILABLE ->
+                        Result.failure(IllegalStateException(availability.errorMessage ?: "Gemini Nano is unavailable on this device."))
+                }
+            }
             try {
                 val url = baseUrl.trimEnd('/') + "/models"
                 val req = Request.Builder().url(url)

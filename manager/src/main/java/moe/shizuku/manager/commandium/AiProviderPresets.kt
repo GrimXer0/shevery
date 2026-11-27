@@ -13,7 +13,15 @@ data class AiProviderPreset(
     val nameRes: Int? = null,
 )
 
+const val GEMINI_NANO_BASE_URL = "local://gemini-nano"
+const val GEMINI_NANO_DEFAULT_MODEL = "gemini-nano"
+const val GEMINI_NANO_PRESET_NAME = "Gemini Nano (On-device)"
+
+fun isGeminiNano(baseUrl: String): Boolean =
+    baseUrl.trim().equals(GEMINI_NANO_BASE_URL, ignoreCase = true)
+
 val aiProviderPresets = listOf(
+    AiProviderPreset(GEMINI_NANO_PRESET_NAME, GEMINI_NANO_BASE_URL),
     AiProviderPreset("OpenRouter", "https://openrouter.ai/api/v1"),
     AiProviderPreset("OpenAI", "https://api.openai.com/v1"),
     AiProviderPreset("DeepSeek", "https://api.deepseek.com/v1"),
@@ -25,10 +33,11 @@ val aiProviderPresets = listOf(
 )
 
 fun urlIsValid(url: String): Boolean =
-    url.startsWith("http://") || url.startsWith("https://")
+    url.startsWith("http://") || url.startsWith("https://") || isGeminiNano(url)
 
 fun matchPresetName(currentName: String, currentBaseUrl: String): String =
     when {
+        isGeminiNano(currentBaseUrl) -> GEMINI_NANO_PRESET_NAME
         currentName.isBlank() -> "OpenRouter"
         else ->
             aiProviderPresets.firstOrNull { it.name == currentName && it.baseUrl == currentBaseUrl.trim() }?.name ?: "Custom"

@@ -28,6 +28,7 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -51,11 +52,14 @@ import kotlinx.coroutines.launch
 import moe.shizuku.manager.R
 import moe.shizuku.manager.commandium.AiModelPickerScreen
 import moe.shizuku.manager.commandium.AiProviderRepository
+import moe.shizuku.manager.commandium.GEMINI_NANO_DEFAULT_MODEL
 import moe.shizuku.manager.commandium.aiProviderPresets
+import moe.shizuku.manager.commandium.isGeminiNano
 import moe.shizuku.manager.commandium.matchPresetName
 import moe.shizuku.manager.commandium.urlIsValid
 import moe.shizuku.manager.utils.AiClient
 import moe.shizuku.manager.utils.AiExplainUtil
+import moe.shizuku.manager.utils.GeminiNanoClient
 
 /**
  * Add/edit provider dialog with progressive disclosure: Preset -> Credentials -> Model.
@@ -89,7 +93,32 @@ fun AiProviderDialog(
     var baseUrlError by remember { mutableStateOf(false) }
     var presetName by remember { mutableStateOf(matchPresetName(currentName, currentBaseUrl)) }
     var presetMenuExpanded by remember { mutableStateOf(false) }
+    val isLocalNano = isGeminiNano(baseUrl)
+    var nanoAvailability by remember { mutableStateOf<GeminiNanoClient.Availability?>(null) }
+    var nanoChecking by remember { mutableStateOf(false) }
+    var nanoDownloading by remember { mutableStateOf(false) }
+    var nanoDownloadProgress by remember { mutableStateOf<String?>(null) }
+    var nanoDownloadError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(isLocalNano) {
+        if (!isLocalNano) {
+            nanoAvailability = null
+            nanoChecking = false
+            nanoDownloading = false
+            nanoDownloadProgress = null
+            nanoDownloadError = null
+            return@LaunchedEffect
+        }
+        nanoChecking = true
+        nanoDownloadError = null
+        val availability = GeminiNanoClient.checkAvailability()
+        nanoAvailability = availability
+        if (model.isBlank()) {
+            model = availability.baseModelName ?: GEMINI_NANO_DEFAULT_MODEL
+        }
+        nanoChecking = false
+    }
 
     // Preload the cached model list when editing a known provider (if any).
     // Brand-new providers auto-discover 500ms after the URL+key settle; edited
@@ -99,7 +128,7 @@ fun AiProviderDialog(
     // remains as an always-available force refresh.
     LaunchedEffect(baseUrl.trim(), apiKey.trim(), providerId) {
         val url = baseUrl.trim()
-        if (url.isEmpty() || apiKey.trim().isEmpty()) return@LaunchedEffect
+        if (isGeminiNano(url) || url.isEmpty() || apiKey.trim().isEmpty()) return@LaunchedEffect
         var cached: List<String> = emptyList()
         var haveCache = false
         if (providerId != null) {
@@ -154,6 +183,7 @@ fun AiProviderDialog(
             Column(modifier = Modifier.fillMaxWidth()) {
                 AiStageIndicator(
                     stage = when {
+                        isLocalNano -> 3
                         model.isNotBlank() || AiExplainUtil.resolveModel(baseUrl.trim()).isNotBlank() -> 3
                         urlIsValid(baseUrl.trim()) && baseUrl.isNotBlank() ->2
                         else ->1
@@ -188,7 +218,7 @@ fun AiProviderDialog(
                                     name = preset.name
                                     baseUrl = preset.baseUrl
                                     apiKey = ""
-                                    model = ""
+                                    model = if (isGeminiNano(preset.baseUrl)) GEMINI_NANO_DEFAULT_MODEL else ""
                                     modelOptions = emptyList()
                                     baseUrlError = false
                                 },
@@ -206,6 +236,122 @@ fun AiProviderDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(12.dp))
+                if (isLocalNano) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.comput_ai_nano_description),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            when {
+                                nanoChecking -> {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        LoadingIndicator(Modifier.size(16.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            text = stringResource(R.string.comput_ai_nano_checking),
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                }
+                                nanoDownloading -> {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        LoadingIndicator(Modifier.size(16.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            text = nanoDownloadProgress?.let {
+                                                stringResource(R.string.comput_ai_nano_downloading_bytes, it)
+                                            } ?: stringResource(R.string.comput_ai_nano_downloading),
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                }
+                                nanoAvailability?.status == GeminiNanoClient.AvailabilityStatus.AVAILABLE -> {
+                                    val baseModel = nanoAvailability?.baseModelName
+                                    Text(
+                                        text = if (!baseModel.isNullOrBlank()) {
+                                            stringResource(R.string.comput_ai_nano_available_model, baseModel)
+                                        } else {
+                                            stringResource(R.string.comput_ai_nano_available)
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                                nanoAvailability?.status == GeminiNanoClient.AvailabilityStatus.DOWNLOADABLE -> {
+                                    Text(
+                                        text = stringResource(R.string.comput_ai_nano_downloadable),
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    OutlinedButton(
+                                        onClick = {
+                                            nanoDownloading = true
+                                            nanoDownloadProgress = null
+                                            nanoDownloadError = null
+                                            scope.launch {
+                                                val result = GeminiNanoClient.downloadModel { downloaded, total ->
+                                                    nanoDownloadProgress = formatByteProgress(downloaded, total)
+                                                }
+                                                nanoDownloading = false
+                                                result.onSuccess {
+                                                    val refreshed = GeminiNanoClient.checkAvailability()
+                                                    nanoAvailability = refreshed
+                                                    if (!refreshed.baseModelName.isNullOrBlank()) {
+                                                        model = refreshed.baseModelName
+                                                    }
+                                                }.onFailure { e ->
+                                                    nanoDownloadError = e.message
+                                                }
+                                            }
+                                        },
+                                    ) {
+                                        Text(stringResource(R.string.comput_ai_nano_download_action))
+                                    }
+                                }
+                                nanoAvailability?.status == GeminiNanoClient.AvailabilityStatus.DOWNLOADING -> {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        LoadingIndicator(Modifier.size(16.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            text = stringResource(R.string.comput_ai_nano_downloading),
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                }
+                                nanoAvailability?.status == GeminiNanoClient.AvailabilityStatus.UNSUPPORTED_ANDROID -> {
+                                    Text(
+                                        text = stringResource(R.string.comput_ai_nano_unsupported_android),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                                else -> {
+                                    Text(
+                                        text = nanoAvailability?.errorMessage
+                                            ?: stringResource(R.string.comput_ai_nano_unavailable),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                            }
+                            if (!nanoDownloadError.isNullOrBlank()) {
+                                Text(
+                                    text = stringResource(R.string.comput_ai_test_fail, nanoDownloadError!!),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                    }
+                } else {
                 OutlinedTextField(
                     value = baseUrl,
                     onValueChange = {
@@ -308,6 +454,7 @@ fun AiProviderDialog(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
+                }
             }
         },
         confirmButton ={
@@ -318,7 +465,12 @@ fun AiProviderDialog(
                         baseUrlError = true
                     } else {
                         baseUrlError = false
-                        onSave(name.trim(), baseUrl.trim(), model.trim(), apiKey.trim())
+                        val resolvedModel = if (isLocalNano) {
+                            model.trim().ifBlank { GEMINI_NANO_DEFAULT_MODEL }
+                        } else {
+                            model.trim()
+                        }
+                        onSave(name.trim(), trimmedUrl, resolvedModel, if (isLocalNano) "" else apiKey.trim())
                     }
                 },
             ) {
@@ -395,5 +547,16 @@ fun computProviderSummary(name: String, model: String): String {
         name.isBlank() -> stringResource(R.string.comput_ai_provider_not_configured)
         model.isBlank() -> name
         else -> name + " - " + model
+    }
+}
+
+private fun formatByteProgress(downloaded: Long, total: Long?): String {
+    val downloadedMb = downloaded / (1024.0 * 1024.0)
+    return if (total != null && total > 0L) {
+        val totalMb = total / (1024.0 * 1024.0)
+        val pct = ((downloaded * 100L) / total).coerceIn(0L, 100L)
+        String.format(java.util.Locale.US, "%d%% (%.1f / %.1f MB)", pct, downloadedMb, totalMb)
+    } else {
+        String.format(java.util.Locale.US, "%.1f MB", downloadedMb)
     }
 }

@@ -85,3 +85,14 @@
 -keep class moe.shizuku.manager.adb.AdbProtocolNative { native <methods>; }
 -keep class moe.shizuku.manager.stealth.StealthNative { native <methods>; }
 -keep class moe.shizuku.manager.module.ModuleNative { native <methods>; }
+
+# ML Kit & Firebase Components (CommonComponentRegistrar is instantiated via reflection)
+-keep class * implements com.google.firebase.components.ComponentRegistrar {
+    public <init>();
+    public java.util.List getComponents();
+}
+-keep class com.google.mlkit.common.internal.** { *; }
+-keep class com.google.mlkit.genai.** { *; }
+-keep class com.google.android.gms.internal.mlkit_genai_prompt.** { *; }
+-dontwarn com.google.mlkit.**
+-dontwarn com.google.android.gms.internal.mlkit_genai_prompt.**

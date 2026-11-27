@@ -106,7 +106,9 @@ object ComputAgent {
             ?: AiExplainUtil.resolveModel(baseUrl).takeIf { it.isNotBlank() }
             ?: return Result.failure(IllegalStateException("empty_model"))
         val key = AiProviderRepository.getKey(active.id)
-        if (key.isBlank()) return Result.failure(IllegalStateException("empty_key"))
+        if (!moe.shizuku.manager.commandium.isGeminiNano(baseUrl) && key.isBlank()) {
+            return Result.failure(IllegalStateException("empty_key"))
+        }
 
         val steps = maxSteps.coerceIn(1, MAX_STEPS_HARD)
         val systemPrompt = "You are the Comput agent inside the Shevery Android app. " +
@@ -202,7 +204,9 @@ object ComputAgent {
             ?: AiExplainUtil.resolveModel(baseUrl).takeIf { it.isNotBlank() }
             ?: return Result.failure(IllegalStateException("empty_model"))
         val key = AiProviderRepository.getKey(active.id)
-        if (key.isBlank()) return Result.failure(IllegalStateException("empty_key"))
+        if (!moe.shizuku.manager.commandium.isGeminiNano(baseUrl) && key.isBlank()) {
+            return Result.failure(IllegalStateException("empty_key"))
+        }
 
         val transcript = buildString {
             append("Goal: ").append(goal).append("\n\nExecuted actions:\n")

@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <uses-sdk tools:overrideLibrary="com.rosan.dhizuku.api" />
+    <uses-sdk tools:overrideLibrary="com.rosan.dhizuku.api,com.google.mlkit.genai.prompt,com.google.mlkit.genai.common" />
 
     <queries>
         <package android:name="moe.shizuku.privileged.api" />
